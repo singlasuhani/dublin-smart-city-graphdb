@@ -16,8 +16,5 @@ RUN chmod +x /opt/graphdb/init-graphdb.sh
 # Expose GraphDB port (Railway auto-detects this)
 EXPOSE 7200
 
-# Switch back to graphdb user
-USER graphdb
-
 # Start GraphDB and run initialization in background
 CMD ["/bin/bash", "-c", "/opt/graphdb/dist/bin/graphdb -Dgraphdb.home=/opt/graphdb/home & sleep 30 && /opt/graphdb/init-graphdb.sh && tail -f /opt/graphdb/home/logs/main.log"]
