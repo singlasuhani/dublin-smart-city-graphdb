@@ -1,0 +1,30 @@
+@prefix ex: <http://example.org/dcc/facilities#> .
+@prefix geo: <http://www.opengis.net/ont/geosparql#> .
+@prefix schema: <http://schema.org/> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# ============================================================================
+# Dublin City Council Committee Areas - Instance Data
+# ============================================================================
+
+ex:NorthCentral a ex:CommitteeArea ;
+    rdfs:label "North Central Area Committee"@en ;
+    schema:name "NORTH CENTRAL" .
+
+ex:NorthWest a ex:CommitteeArea ;
+    rdfs:label "North West Area Committee"@en ;
+    schema:name "NORTH WEST" .
+
+ex:Central a ex:CommitteeArea ;
+    rdfs:label "Central Area Committee"@en ;
+    schema:name "CENTRAL" .
+
+ex:SouthCentral a ex:CommitteeArea ;
+    rdfs:label "South Central Area Committee"@en ;
+    schema:name "SOUTH CENTRAL" .
+
+ex:SouthEast a ex:CommitteeArea ;
+    rdfs:label "South East Area Committee"@en ;
+    schema:name "SOUTH EAST" .

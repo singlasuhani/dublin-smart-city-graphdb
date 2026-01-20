@@ -1,0 +1,220 @@
+@prefix : <http://example.org/dcc/facilities#> .
+@prefix ex: <http://example.org/dcc/facilities#> .
+@prefix geo: <http://www.opengis.net/ont/geosparql#> .
+@prefix schema: <http://schema.org/> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl: <http://www.w3.org/2001/12/owl#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# ============================================================================
+# Dublin City Council Facilities Ontology
+# ============================================================================
+# Purpose: Minimal ontology for querying DCC facilities by type and location
+# Supports: facility types, committee areas, spatial queries, counts
+# ============================================================================
+
+<http://example.org/dcc/facilities> a owl:Ontology ;
+    rdfs:label "Dublin City Council Facilities Ontology" ;
+    rdfs:comment "Ontology for Dublin City Council public facilities including parks, libraries, toilets, and other amenities." ;
+    owl:versionInfo "1.0" .
+
+# ============================================================================
+# CORE CLASSES
+# ============================================================================
+
+ex:Facility a owl:Class ;
+    rdfs:label "Facility" ;
+    rdfs:comment "A public facility managed by Dublin City Council (e.g., park, library, toilet)." .
+
+ex:FacilityType a owl:Class ;
+    rdfs:label "Facility Type" ;
+    rdfs:comment "A category of facility (e.g., Park, Library, Toilet, BikeParking)." .
+
+ex:CommitteeArea a owl:Class ;
+    rdfs:label "Committee Area" ;
+    rdfs:comment "One of the five Dublin City Council administrative committee areas." .
+
+# ============================================================================
+# FACILITY TYPE INSTANCES
+# ============================================================================
+# Using Option A: types as instances (simpler and more flexible)
+
+ex:Park a ex:FacilityType ;
+    rdfs:label "Park" .
+
+ex:Library a ex:FacilityType ;
+    rdfs:label "Library" .
+
+ex:Toilet a ex:FacilityType ;
+    rdfs:label "Toilet" .
+
+ex:BikeParking a ex:FacilityType ;
+    rdfs:label "Bike Parking" .
+
+ex:CommunityCentre a ex:FacilityType ;
+    rdfs:label "Community Centre" .
+
+ex:WaterFountain a ex:FacilityType ;
+    rdfs:label "Water Fountain" .
+
+ex:PublicBin a ex:FacilityType ;
+    rdfs:label "Public Bin" .
+
+ex:RecyclingCentre a ex:FacilityType ;
+    rdfs:label "Recycling Centre" .
+
+ex:GardaStation a ex:FacilityType ;
+    rdfs:label "Garda Station" .
+
+ex:DisabledParking a ex:FacilityType ;
+    rdfs:label "Disabled Parking" .
+
+ex:SwimmingPool a ex:FacilityType ;
+    rdfs:label "Swimming Pool" .
+
+ex:PlaceOfWorship a ex:FacilityType ;
+    rdfs:label "Place of Worship" .
+
+# ============================================================================
+# COMMITTEE AREA INSTANCES
+# ============================================================================
+
+ex:NorthCentral a ex:CommitteeArea ;
+    rdfs:label "North Central" ;
+    schema:name "NORTH CENTRAL" .
+
+ex:NorthWest a ex:CommitteeArea ;
+    rdfs:label "North West" ;
+    schema:name "NORTH WEST" .
+
+ex:Central a ex:CommitteeArea ;
+    rdfs:label "Central" ;
+    schema:name "CENTRAL" .
+
+ex:SouthCentral a ex:CommitteeArea ;
+    rdfs:label "South Central" ;
+    schema:name "SOUTH CENTRAL" .
+
+ex:SouthEast a ex:CommitteeArea ;
+    rdfs:label "South East" ;
+    schema:name "SOUTH EAST" .
+
+# ============================================================================
+# CORE PROPERTIES
+# ============================================================================
+
+# Facility Type Property
+ex:hasFacilityType a owl:ObjectProperty ;
+    rdfs:label "has facility type" ;
+    rdfs:comment "Links a facility to its type (e.g., Park, Library)." ;
+    rdfs:domain ex:Facility ;
+    rdfs:range ex:FacilityType .
+
+# Committee Area Property
+ex:inCommitteeArea a owl:ObjectProperty ;
+    rdfs:label "in committee area" ;
+    rdfs:comment "Links a facility to the committee area it belongs to." ;
+    rdfs:domain ex:Facility ;
+    rdfs:range ex:CommitteeArea .
+
+# Identifier Property
+ex:facilityId a owl:DatatypeProperty ;
+    rdfs:label "facility ID" ;
+    rdfs:comment "Unique identifier for the facility (UUID)." ;
+    rdfs:domain ex:Facility ;
+    rdfs:range xsd:string .
+
+# Source Dataset Property
+ex:sourceDataset a owl:DatatypeProperty ;
+    rdfs:label "source dataset" ;
+    rdfs:comment "Name of the source CSV file this facility came from." ;
+    rdfs:domain ex:Facility ;
+    rdfs:range xsd:string .
+
+# ============================================================================
+# SCHEMA.ORG PROPERTIES (for labels and addresses)
+# ============================================================================
+
+schema:name a owl:DatatypeProperty ;
+    rdfs:label "name" ;
+    rdfs:comment "Human-readable name of the facility." ;
+    rdfs:domain ex:Facility ;
+    rdfs:range xsd:string .
+
+schema:address a owl:DatatypeProperty ;
+    rdfs:label "address" ;
+    rdfs:comment "Street address of the facility." ;
+    rdfs:domain ex:Facility ;
+    rdfs:range xsd:string .
+
+schema:url a owl:DatatypeProperty ;
+    rdfs:label "URL" ;
+    rdfs:comment "Website URL for the facility (if available)." ;
+    rdfs:domain ex:Facility ;
+    rdfs:range xsd:anyURI .
+
+# ============================================================================
+# GEOSPATIAL PROPERTIES (GeoSPARQL)
+# ============================================================================
+
+geo:hasGeometry a owl:ObjectProperty ;
+    rdfs:label "has geometry" ;
+    rdfs:comment "Links a facility to its spatial geometry." ;
+    rdfs:domain ex:Facility ;
+    rdfs:range geo:Geometry .
+
+geo:asWKT a owl:DatatypeProperty ;
+    rdfs:label "as WKT" ;
+    rdfs:comment "Well-Known Text representation of the geometry (POINT)." ;
+    rdfs:domain geo:Geometry ;
+    rdfs:range geo:wktLiteral .
+
+# Coordinate Properties (for simple queries without full GeoSPARQL)
+ex:latitude a owl:DatatypeProperty ;
+    rdfs:label "latitude" ;
+    rdfs:comment "WGS84 latitude coordinate." ;
+    rdfs:domain ex:Facility ;
+    rdfs:range xsd:decimal .
+
+ex:longitude a owl:DatatypeProperty ;
+    rdfs:label "longitude" ;
+    rdfs:comment "WGS84 longitude coordinate." ;
+    rdfs:domain ex:Facility ;
+    rdfs:range xsd:decimal .
+
+# ============================================================================
+# EXAMPLE QUERIES THIS ONTOLOGY SUPPORTS
+# ============================================================================
+# 
+# 1. Count facilities by type:
+#    SELECT ?type (COUNT(?facility) AS ?count)
+#    WHERE { ?facility ex:hasFacilityType ?type }
+#    GROUP BY ?type
+#
+# 2. Find areas with no parks:
+#    SELECT ?area WHERE {
+#      ?area a ex:CommitteeArea .
+#      FILTER NOT EXISTS {
+#        ?facility ex:hasFacilityType ex:Park ;
+#                  ex:inCommitteeArea ?area .
+#      }
+#    }
+#
+# 3. List all facilities in a specific area:
+#    SELECT ?name ?type WHERE {
+#      ?facility ex:inCommitteeArea ex:NorthCentral ;
+#                schema:name ?name ;
+#                ex:hasFacilityType ?type .
+#    }
+#
+# 4. Spatial query (facilities near a point):
+#    SELECT ?facility ?name WHERE {
+#      ?facility schema:name ?name ;
+#                ex:latitude ?lat ;
+#                ex:longitude ?lon .
+#      FILTER(?lat > 53.34 && ?lat < 53.36 && 
+#             ?lon > -6.27 && ?lon < -6.25)
+#    }
+#
+# ============================================================================

@@ -1,0 +1,12 @@
+# Ignore GraphDB runtime files
+home/
+logs/
+work/
+*.log
+
+# Ignore OS files
+.DS_Store
+Thumbs.db
+
+# Ignore Git files (when testing locally)
+.git/
