@@ -10,3 +10,4 @@ Thumbs.db
 
 # Ignore Git files (when testing locally)
 .git/
+.gitignore

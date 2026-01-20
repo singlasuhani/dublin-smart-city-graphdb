@@ -1,5 +1,5 @@
 #!/bin/bash
-# GraphDB Auto-Initialization Script
+# GraphDB Auto-Initialization Script for Railway
 # Creates repository and loads RDF data automatically on container startup
 
 set -e
@@ -9,11 +9,11 @@ REPO_NAME="dublin_facilities"
 REPO_URL="$GRAPHDB_URL/repositories/$REPO_NAME"
 
 echo "============================================"
-echo "GraphDB Auto-Initialization Starting..."
+echo "🚂 Railway GraphDB Initialization"
 echo "============================================"
 
 # Wait for GraphDB to be fully ready
-echo "Waiting for GraphDB to be ready..."
+echo "⏳ Waiting for GraphDB to start..."
 MAX_RETRIES=30
 RETRY_COUNT=0
 
@@ -23,18 +23,18 @@ until curl -sf "$GRAPHDB_URL/rest/repositories" > /dev/null 2>&1; do
         echo "❌ ERROR: GraphDB failed to start after $MAX_RETRIES attempts"
         exit 1
     fi
-    echo "  Attempt $RETRY_COUNT/$MAX_RETRIES - GraphDB not ready yet, waiting..."
+    echo "  Attempt $RETRY_COUNT/$MAX_RETRIES..."
     sleep 5
 done
 
-echo "✓ GraphDB is ready!"
+echo "✅ GraphDB is ready!"
 
 # Check if repository already exists
-echo "Checking if repository exists..."
+echo "🔍 Checking if repository exists..."
 REPO_EXISTS=$(curl -s "$GRAPHDB_URL/rest/repositories" | grep -c "\"$REPO_NAME\"" || true)
 
 if [ "$REPO_EXISTS" -eq 0 ]; then
-    echo "Creating repository '$REPO_NAME'..."
+    echo "📦 Creating repository '$REPO_NAME'..."
     
     # Create repository using GraphDB REST API
     curl -X POST "$GRAPHDB_URL/rest/repositories" \
@@ -68,7 +68,7 @@ if [ "$REPO_EXISTS" -eq 0 ]; then
         }' > /dev/null 2>&1
     
     if [ $? -eq 0 ]; then
-        echo "✓ Repository created successfully"
+        echo "✅ Repository created successfully"
     else
         echo "❌ Failed to create repository"
         exit 1
@@ -78,7 +78,7 @@ if [ "$REPO_EXISTS" -eq 0 ]; then
     sleep 5
     
     echo "============================================"
-    echo "Loading RDF Data Files..."
+    echo "📚 Loading RDF Data Files..."
     echo "============================================"
     
     # Load ontology
@@ -89,7 +89,7 @@ if [ "$REPO_EXISTS" -eq 0 ]; then
         > /dev/null 2>&1
     
     if [ $? -eq 0 ]; then
-        echo "  ✓ Ontology loaded"
+        echo "  ✅ Ontology loaded"
     else
         echo "  ❌ Failed to load ontology"
     fi
@@ -102,7 +102,7 @@ if [ "$REPO_EXISTS" -eq 0 ]; then
         > /dev/null 2>&1
     
     if [ $? -eq 0 ]; then
-        echo "  ✓ Areas loaded"
+        echo "  ✅ Areas loaded"
     else
         echo "  ❌ Failed to load areas"
     fi
@@ -115,7 +115,7 @@ if [ "$REPO_EXISTS" -eq 0 ]; then
         > /dev/null 2>&1
     
     if [ $? -eq 0 ]; then
-        echo "  ✓ Facilities loaded"
+        echo "  ✅ Facilities loaded"
     else
         echo "  ❌ Failed to load facilities"
     fi
@@ -123,34 +123,34 @@ if [ "$REPO_EXISTS" -eq 0 ]; then
     # Get triple count
     echo ""
     echo "============================================"
-    echo "Verification"
+    echo "📊 Verification"
     echo "============================================"
     
     COUNT=$(curl -s "$REPO_URL?query=SELECT%20(COUNT(*)%20as%20?count)%20WHERE%20{%20?s%20?p%20?o%20}" \
         -H "Accept: application/sparql-results+json" 2>/dev/null | \
-        grep -o '"value":"[0-9]*"' | head -1 | grep -o '[0-9]*' || echo "0")
+        grep -o '"value":"[0-9]"' | head -1 | grep -o '[0-9]' || echo "0")
     
-    echo "Total triples loaded: $COUNT"
+    echo "📈 Total triples loaded: $COUNT"
     
     if [ "$COUNT" -gt 0 ]; then
-        echo "✓ Data successfully loaded!"
+        echo "✅ Data successfully loaded!"
     else
-        echo "⚠ Warning: No triples found in repository"
+        echo "⚠️  Warning: No triples found in repository"
     fi
     
 else
-    echo "✓ Repository '$REPO_NAME' already exists (skipping creation)"
+    echo "✅ Repository '$REPO_NAME' already exists"
     
     # Still show triple count
     COUNT=$(curl -s "$REPO_URL?query=SELECT%20(COUNT(*)%20as%20?count)%20WHERE%20{%20?s%20?p%20?o%20}" \
         -H "Accept: application/sparql-results+json" 2>/dev/null | \
-        grep -o '"value":"[0-9]*"' | head -1 | grep -o '[0-9]*' || echo "0")
+        grep -o '"value":"[0-9]"' | head -1 | grep -o '[0-9]' || echo "0")
     
-    echo "Current triple count: $COUNT"
+    echo "📊 Current triple count: $COUNT"
 fi
 
 echo "============================================"
-echo "GraphDB is ready to accept queries!"
-echo "Access at: $GRAPHDB_URL"
-echo "Repository: $REPO_NAME"
+echo "🎉 GraphDB is ready for queries!"
+echo "🌐 Access at: $GRAPHDB_URL"
+echo "📦 Repository: $REPO_NAME"
 echo "============================================"
