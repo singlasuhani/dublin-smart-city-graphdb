@@ -14,17 +14,21 @@ echo "============================================"
 
 # Wait for GraphDB to be fully ready
 echo "⏳ Waiting for GraphDB to start..."
-MAX_RETRIES=30
+MAX_RETRIES=20
 RETRY_COUNT=0
 
 until curl -sf "$GRAPHDB_URL/rest/repositories" > /dev/null 2>&1; do
     RETRY_COUNT=$((RETRY_COUNT+1))
     if [ $RETRY_COUNT -gt $MAX_RETRIES ]; then
         echo "❌ ERROR: GraphDB failed to start after $MAX_RETRIES attempts"
+        echo "Showing GraphDB logs:"
+        if [ -f /opt/graphdb/home/logs/main.log ]; then
+            tail -n 100 /opt/graphdb/home/logs/main.log
+        fi
         exit 1
     fi
     echo "  Attempt $RETRY_COUNT/$MAX_RETRIES..."
-    sleep 5
+    sleep 10
 done
 
 echo "✅ GraphDB is ready!"
@@ -128,7 +132,7 @@ if [ "$REPO_EXISTS" -eq 0 ]; then
     
     COUNT=$(curl -s "$REPO_URL?query=SELECT%20(COUNT(*)%20as%20?count)%20WHERE%20{%20?s%20?p%20?o%20}" \
         -H "Accept: application/sparql-results+json" 2>/dev/null | \
-        grep -o '"value":"[0-9]"' | head -1 | grep -o '[0-9]' || echo "0")
+        grep -o '"value":"[0-9]*"' | head -1 | grep -o '[0-9]*' || echo "0")
     
     echo "📈 Total triples loaded: $COUNT"
     
@@ -144,7 +148,7 @@ else
     # Still show triple count
     COUNT=$(curl -s "$REPO_URL?query=SELECT%20(COUNT(*)%20as%20?count)%20WHERE%20{%20?s%20?p%20?o%20}" \
         -H "Accept: application/sparql-results+json" 2>/dev/null | \
-        grep -o '"value":"[0-9]"' | head -1 | grep -o '[0-9]' || echo "0")
+        grep -o '"value":"[0-9]*"' | head -1 | grep -o '[0-9]*' || echo "0")
     
     echo "📊 Current triple count: $COUNT"
 fi
