@@ -26,7 +26,7 @@ echo "⏳ Waiting for GraphDB to start..."
 MAX_RETRIES=30
 RETRY_COUNT=0
 
-until curl -f -sS "$GRAPHDB_URL/rest/repositories" >/dev/null; do
+until curl -sS "$GRAPHDB_URL/rest/repositories" >/dev/null; do
   RETRY_COUNT=$((RETRY_COUNT + 1))
   if [ "$RETRY_COUNT" -gt "$MAX_RETRIES" ]; then
     echo "❌ ERROR: GraphDB failed to start after $MAX_RETRIES attempts"
@@ -49,43 +49,58 @@ echo "🔍 Checking if repository exists..."
 if curl -sS "$GRAPHDB_URL/rest/repositories" | grep -q "\"$REPO_NAME\""; then
   echo "✅ Repository '$REPO_NAME' already exists"
 else
-  echo "📦 Creating repository '$REPO_NAME' (TTL config)..."
+  echo "📦 Creating repository '$REPO_NAME' (MINIMAL TTL config)..."
 
+  # Minimal repo config to avoid GraphDB config incompatibilities
   cat > /tmp/repo-config.ttl <<EOF
 @prefix rep: <http://www.openrdf.org/config/repository#> .
 @prefix sr: <http://www.openrdf.org/config/repository/sail#> .
 @prefix sail: <http://www.openrdf.org/config/sail#> .
-@prefix graphdb: <http://www.ontotext.com/config/graphdb#> .
 
 [] a rep:Repository ;
    rep:repositoryID "$REPO_NAME" ;
    rep:repositoryImpl [
       rep:repositoryType "graphdb:SailRepository" ;
       sr:sailImpl [
-         sail:sailType "graphdb:Sail" ;
-         graphdb:ruleset "rdfsplus-optimized" ;
-         graphdb:enable-context-index "true" ;
-         graphdb:enablePredicateList "true" ;
-         graphdb:enable-lucene-index "true"
+         sail:sailType "graphdb:Sail"
       ]
    ] .
 EOF
 
-  # -f makes curl fail on 4xx/5xx so we can see errors in Railway logs
-  curl -f -sS -X POST "$GRAPHDB_URL/rest/repositories" \
-    -H "Content-Type: text/turtle" \
-    --data-binary @/tmp/repo-config.ttl
+  # Capture body + status for debugging
+  RESP_FILE="/tmp/create-repo-response.txt"
+  HTTP_CODE=$(
+    curl -sS -o "$RESP_FILE" -w "%{http_code}" \
+      -X POST "$GRAPHDB_URL/rest/repositories" \
+      -H "Content-Type: text/turtle" \
+      --data-binary @/tmp/repo-config.ttl \
+    || true
+  )
 
-  echo "✅ Repository created successfully"
+  if [ "$HTTP_CODE" != "201" ] && [ "$HTTP_CODE" != "204" ] && [ "$HTTP_CODE" != "200" ]; then
+    echo "❌ Failed to create repository. HTTP: $HTTP_CODE"
+    echo "---- Response body ----"
+    cat "$RESP_FILE" || true
+    echo "-----------------------"
+    echo "---- Tail GraphDB logs ----"
+    if [ -f /opt/graphdb/home/logs/main.log ]; then
+      tail -n 200 /opt/graphdb/home/logs/main.log || true
+    else
+      echo "(main.log not found at /opt/graphdb/home/logs/main.log)"
+      find /opt/graphdb -maxdepth 4 -type f -name "*.log" 2>/dev/null | head -n 20 || true
+    fi
+    echo "---------------------------"
+    exit 1
+  fi
+
+  echo "✅ Repository created successfully (HTTP $HTTP_CODE)"
 fi
 
-# Give GraphDB a moment to fully initialize the repo
+# Give GraphDB a moment to initialize the repo
 sleep 2
 
 # -----------------------------
-# Load RDF data (only if repo is empty OR always? We'll do idempotent-ish load:
-# If you redeploy and repo persists, you probably DON'T want duplicates.
-# We'll only load if triple count is 0.
+# Check triple count
 # -----------------------------
 echo "============================================"
 echo "📊 Checking current triple count..."
@@ -107,33 +122,27 @@ else
   echo "📚 Loading RDF Data Files..."
   echo "============================================"
 
-  if [ ! -f "$ONTOLOGY_FILE" ]; then
-    echo "❌ Missing ontology file: $ONTOLOGY_FILE"
-    exit 1
-  fi
-  if [ ! -f "$AREAS_FILE" ]; then
-    echo "❌ Missing areas file: $AREAS_FILE"
-    exit 1
-  fi
-  if [ ! -f "$FACILITIES_FILE" ]; then
-    echo "❌ Missing facilities data file: $FACILITIES_FILE"
-    exit 1
-  fi
+  for f in "$ONTOLOGY_FILE" "$AREAS_FILE" "$FACILITIES_FILE"; do
+    if [ ! -f "$f" ]; then
+      echo "❌ Missing file: $f"
+      exit 1
+    fi
+  done
 
   echo "1/3 Loading facilities ontology..."
-  curl -f -sS -X POST "$REPO_URL/statements" \
+  curl -sS -X POST "$REPO_URL/statements" \
     -H "Content-Type: text/turtle" \
     --data-binary @"$ONTOLOGY_FILE"
   echo "  ✅ Ontology loaded"
 
   echo "2/3 Loading committee areas..."
-  curl -f -sS -X POST "$REPO_URL/statements" \
+  curl -sS -X POST "$REPO_URL/statements" \
     -H "Content-Type: text/turtle" \
     --data-binary @"$AREAS_FILE"
   echo "  ✅ Areas loaded"
 
   echo "3/3 Loading facilities data..."
-  curl -f -sS -X POST "$REPO_URL/statements" \
+  curl -sS -X POST "$REPO_URL/statements" \
     -H "Content-Type: text/turtle" \
     --data-binary @"$FACILITIES_FILE"
   echo "  ✅ Facilities loaded"
@@ -155,13 +164,6 @@ COUNT_AFTER=$(
 )
 
 echo "📈 Total triples in '$REPO_NAME': $COUNT_AFTER"
-
-if [ "${COUNT_AFTER:-0}" -gt 0 ]; then
-  echo "✅ GraphDB repository is ready and has data!"
-else
-  echo "⚠️  Warning: Repository exists but triple count is 0"
-fi
-
 echo "============================================"
 echo "🎉 GraphDB is ready for queries!"
 echo "🌐 Base URL   : $GRAPHDB_URL"
