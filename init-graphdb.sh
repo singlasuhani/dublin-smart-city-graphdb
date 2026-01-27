@@ -8,10 +8,6 @@ GRAPHDB_URL="${GRAPHDB_URL:-http://localhost:7200}"
 REPO_NAME="${REPO_NAME:-city_facilities}"
 REPO_URL="$GRAPHDB_URL/repositories/$REPO_NAME"
 
-ONTOLOGY_FILE="/opt/graphdb/data/ontology/facilities.ttl"
-AREAS_FILE="/opt/graphdb/data/graph_data/areas.ttl"
-FACILITIES_FILE="/opt/graphdb/data/graph_data/facilities_data.ttl"
-
 echo "============================================"
 echo "🚂 Railway GraphDB Initialization"
 echo "============================================"
@@ -19,18 +15,16 @@ echo "GRAPHDB_URL: $GRAPHDB_URL"
 echo "REPO_NAME  : $REPO_NAME"
 echo "============================================"
 
-# -----------------------------
-# Wait for GraphDB to be ready
-# -----------------------------
+# Wait for GraphDB to be fully ready
 echo "⏳ Waiting for GraphDB to start..."
-MAX_RETRIES=30
+MAX_RETRIES=60
 RETRY_COUNT=0
 
 until curl -sS "$GRAPHDB_URL/rest/repositories" >/dev/null; do
-  RETRY_COUNT=$((RETRY_COUNT + 1))
+  RETRY_COUNT=$((RETRY_COUNT+1))
   if [ "$RETRY_COUNT" -gt "$MAX_RETRIES" ]; then
     echo "❌ ERROR: GraphDB failed to start after $MAX_RETRIES attempts"
-    echo "Showing GraphDB logs (if available):"
+    echo "Showing GraphDB logs:"
     if [ -f /opt/graphdb/home/logs/main.log ]; then
       tail -n 200 /opt/graphdb/home/logs/main.log || true
     fi
@@ -42,16 +36,13 @@ done
 
 echo "✅ GraphDB is ready!"
 
-# -----------------------------
-# Check if repository exists
-# -----------------------------
+# Check if repository already exists
 echo "🔍 Checking if repository exists..."
 if curl -sS "$GRAPHDB_URL/rest/repositories" | grep -q "\"$REPO_NAME\""; then
   echo "✅ Repository '$REPO_NAME' already exists"
 else
-  echo "📦 Creating repository '$REPO_NAME' (MINIMAL TTL config)..."
+  echo "📦 Creating repository '$REPO_NAME' (TTL config)..."
 
-  # Minimal repo config to avoid GraphDB config incompatibilities
   cat > /tmp/repo-config.ttl <<EOF
 @prefix rep: <http://www.openrdf.org/config/repository#> .
 @prefix sr: <http://www.openrdf.org/config/repository/sail#> .
@@ -67,90 +58,57 @@ else
    ] .
 EOF
 
-  # Capture body + status for debugging
-  RESP_FILE="/tmp/create-repo-response.txt"
-  HTTP_CODE=$(
-    curl -sS -o "$RESP_FILE" -w "%{http_code}" \
-      -X POST "$GRAPHDB_URL/rest/repositories" \
-      -H "Content-Type: text/turtle" \
-      --data-binary @/tmp/repo-config.ttl \
-    || true
-  )
+  # Create repository (fail loudly if GraphDB returns 4xx/5xx)
+  curl -f -sS -X POST "$GRAPHDB_URL/rest/repositories" \
+    -H "Content-Type: text/turtle" \
+    --data-binary @/tmp/repo-config.ttl
 
-  if [ "$HTTP_CODE" != "201" ] && [ "$HTTP_CODE" != "204" ] && [ "$HTTP_CODE" != "200" ]; then
-    echo "❌ Failed to create repository. HTTP: $HTTP_CODE"
-    echo "---- Response body ----"
-    cat "$RESP_FILE" || true
-    echo "-----------------------"
-    echo "---- Tail GraphDB logs ----"
-    if [ -f /opt/graphdb/home/logs/main.log ]; then
-      tail -n 200 /opt/graphdb/home/logs/main.log || true
-    else
-      echo "(main.log not found at /opt/graphdb/home/logs/main.log)"
-      find /opt/graphdb -maxdepth 4 -type f -name "*.log" 2>/dev/null | head -n 20 || true
-    fi
-    echo "---------------------------"
-    exit 1
-  fi
-
-  echo "✅ Repository created successfully (HTTP $HTTP_CODE)"
+  echo "✅ Repository created successfully"
 fi
 
-# Give GraphDB a moment to initialize the repo
+# Wait for repository to be ready
 sleep 2
 
-# -----------------------------
-# Check triple count
-# -----------------------------
 echo "============================================"
-echo "📊 Checking current triple count..."
+echo "📊 Checking triple count..."
 echo "============================================"
 
 COUNT_BEFORE=$(
   curl -sS -G "$REPO_URL" \
     --data-urlencode 'query=SELECT (COUNT(*) as ?count) WHERE { ?s ?p ?o }' \
-    -H "Accept: application/sparql-results+json" \
+    -H "Accept: application/sparql-results+json" 2>/dev/null \
   | grep -o '"value":"[0-9]*"' | head -1 | grep -o '[0-9]*' || echo "0"
 )
 
-echo "📈 Current triples in '$REPO_NAME': $COUNT_BEFORE"
+echo "📈 Current triples: $COUNT_BEFORE"
 
-if [ "${COUNT_BEFORE:-0}" -gt 0 ]; then
-  echo "✅ Repository already has data. Skipping load to avoid duplicates."
-else
+# Only load if empty (prevents duplicates on redeploy)
+if [ "${COUNT_BEFORE:-0}" -eq 0 ]; then
   echo "============================================"
   echo "📚 Loading RDF Data Files..."
   echo "============================================"
 
-  for f in "$ONTOLOGY_FILE" "$AREAS_FILE" "$FACILITIES_FILE"; do
-    if [ ! -f "$f" ]; then
-      echo "❌ Missing file: $f"
-      exit 1
-    fi
-  done
-
   echo "1/3 Loading facilities ontology..."
-  curl -sS -X POST "$REPO_URL/statements" \
+  curl -f -sS -X POST "$REPO_URL/statements" \
     -H "Content-Type: text/turtle" \
-    --data-binary @"$ONTOLOGY_FILE"
+    --data-binary @/opt/graphdb/data/ontology/facilities.ttl
   echo "  ✅ Ontology loaded"
 
   echo "2/3 Loading committee areas..."
-  curl -sS -X POST "$REPO_URL/statements" \
+  curl -f -sS -X POST "$REPO_URL/statements" \
     -H "Content-Type: text/turtle" \
-    --data-binary @"$AREAS_FILE"
+    --data-binary @/opt/graphdb/data/graph_data/areas.ttl
   echo "  ✅ Areas loaded"
 
   echo "3/3 Loading facilities data..."
-  curl -sS -X POST "$REPO_URL/statements" \
+  curl -f -sS -X POST "$REPO_URL/statements" \
     -H "Content-Type: text/turtle" \
-    --data-binary @"$FACILITIES_FILE"
+    --data-binary @/opt/graphdb/data/graph_data/facilities_data.ttl
   echo "  ✅ Facilities loaded"
+else
+  echo "✅ Repo already has data — skipping load to avoid duplicates."
 fi
 
-# -----------------------------
-# Verification
-# -----------------------------
 echo ""
 echo "============================================"
 echo "📊 Verification"
@@ -159,14 +117,20 @@ echo "============================================"
 COUNT_AFTER=$(
   curl -sS -G "$REPO_URL" \
     --data-urlencode 'query=SELECT (COUNT(*) as ?count) WHERE { ?s ?p ?o }' \
-    -H "Accept: application/sparql-results+json" \
+    -H "Accept: application/sparql-results+json" 2>/dev/null \
   | grep -o '"value":"[0-9]*"' | head -1 | grep -o '[0-9]*' || echo "0"
 )
 
-echo "📈 Total triples in '$REPO_NAME': $COUNT_AFTER"
+echo "📈 Total triples loaded: $COUNT_AFTER"
+
+if [ "${COUNT_AFTER:-0}" -gt 0 ]; then
+  echo "✅ Data successfully loaded!"
+else
+  echo "⚠️  Warning: No triples found in repository"
+fi
+
 echo "============================================"
 echo "🎉 GraphDB is ready for queries!"
-echo "🌐 Base URL   : $GRAPHDB_URL"
-echo "📦 Repository : $REPO_NAME"
-echo "🔗 SPARQL     : $REPO_URL"
+echo "🌐 Access at: $GRAPHDB_URL"
+echo "📦 Repository: $REPO_NAME"
 echo "============================================"
