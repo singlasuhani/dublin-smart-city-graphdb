@@ -14,4 +14,3 @@ COPY data/graph_data/facilities_data.ttl /opt/graphdb/data/graph_data/
 EXPOSE 7200
 
 # Start GraphDB in server-only mode (no workbench UI overhead)
-CMD ["/opt/graphdb/dist/bin/graphdb", "-s", "-Dgraphdb.home=/opt/graphdb/home"]
