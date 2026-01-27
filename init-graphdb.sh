@@ -1,13 +1,13 @@
 #!/bin/bash
-# GraphDB Auto-Initialization Script for Railway
-# Creates repository and loads RDF data automatically on container startup
+# init-graphdb.sh - Create repository + load TTL files (Railway-safe)
+# Uses Railway $PORT so it always hits the correct internal port.
 
 set -euo pipefail
 
 PORT_TO_USE="${PORT:-7200}"
 GRAPHDB_URL="http://localhost:${PORT_TO_USE}"
 
-# Choose repo name (can override via env var REPO_NAME)
+# Repo name (override via Railway env REPO_NAME if you want)
 REPO_NAME="${REPO_NAME:-city_facilities}"
 REPO_URL="${GRAPHDB_URL}/repositories/${REPO_NAME}"
 
@@ -22,38 +22,27 @@ echo "GRAPHDB_URL: ${GRAPHDB_URL}"
 echo "REPO_NAME  : ${REPO_NAME}"
 echo "============================================"
 
-# Wait for GraphDB to be fully ready (extra safety)
-echo "⏳ Waiting for GraphDB to start..."
-MAX_RETRIES=90
-RETRY_COUNT=0
-
+echo "⏳ Waiting for GraphDB REST API (extra safety)..."
+MAX_RETRIES=120
+RETRY=0
 until curl -sS "${GRAPHDB_URL}/rest/repositories" >/dev/null; do
-  RETRY_COUNT=$((RETRY_COUNT + 1))
-  if [ "${RETRY_COUNT}" -gt "${MAX_RETRIES}" ]; then
-    echo "❌ ERROR: GraphDB failed to start after ${MAX_RETRIES} attempts"
-    echo "---- Tail GraphDB logs ----"
-    if [ -f /opt/graphdb/home/logs/main.log ]; then
-      tail -n 300 /opt/graphdb/home/logs/main.log || true
-    else
-      echo "(main.log not found)"
-      find /opt/graphdb -maxdepth 4 -type f -name "*.log" 2>/dev/null | head -n 20 || true
-    fi
+  RETRY=$((RETRY+1))
+  echo "  Attempt ${RETRY}/${MAX_RETRIES}..."
+  if [ "${RETRY}" -ge "${MAX_RETRIES}" ]; then
+    echo "❌ ERROR: GraphDB REST API never became ready"
     exit 1
   fi
-  echo "  Attempt ${RETRY_COUNT}/${MAX_RETRIES}..."
   sleep 5
 done
+echo "✅ GraphDB REST API reachable"
 
-echo "✅ GraphDB is ready!"
-
-# Check if repository already exists
 echo "🔍 Checking if repository exists..."
 if curl -sS "${GRAPHDB_URL}/rest/repositories" | grep -q "\"${REPO_NAME}\""; then
   echo "✅ Repository '${REPO_NAME}' already exists"
 else
   echo "📦 Creating repository '${REPO_NAME}' (TTL config)..."
 
-  # Minimal repo config (most compatible; avoids 500s from extra settings)
+  # Minimal repo config = most compatible (avoids 500s)
   cat > /tmp/repo-config.ttl <<EOF
 @prefix rep: <http://www.openrdf.org/config/repository#> .
 @prefix sr: <http://www.openrdf.org/config/repository/sail#> .
@@ -83,11 +72,6 @@ EOF
     echo "---- Response body ----"
     cat "${RESP_FILE}" || true
     echo "-----------------------"
-    echo "---- Tail GraphDB logs ----"
-    if [ -f /opt/graphdb/home/logs/main.log ]; then
-      tail -n 300 /opt/graphdb/home/logs/main.log || true
-    fi
-    echo "---------------------------"
     exit 1
   fi
 
@@ -96,9 +80,8 @@ fi
 
 sleep 2
 
-# Triple count (to avoid re-loading + duplicates on redeploy)
 echo "============================================"
-echo "📊 Checking current triple count..."
+echo "📊 Checking triple count..."
 echo "============================================"
 
 COUNT_BEFORE=$(
@@ -110,8 +93,9 @@ COUNT_BEFORE=$(
 
 echo "📈 Current triples in '${REPO_NAME}': ${COUNT_BEFORE}"
 
+# Load only if empty (prevents duplicates on redeploy)
 if [ "${COUNT_BEFORE:-0}" -gt 0 ]; then
-  echo "✅ Repository already has data. Skipping load to avoid duplicates."
+  echo "✅ Repo already has data. Skipping load to avoid duplicates."
 else
   echo "============================================"
   echo "📚 Loading RDF Data Files..."
@@ -124,19 +108,19 @@ else
     fi
   done
 
-  echo "1/3 Loading facilities ontology..."
+  echo "1/3 Loading ontology..."
   curl -f -sS -X POST "${REPO_URL}/statements" \
     -H "Content-Type: text/turtle" \
     --data-binary @"${ONTOLOGY_FILE}"
   echo "  ✅ Ontology loaded"
 
-  echo "2/3 Loading committee areas..."
+  echo "2/3 Loading areas..."
   curl -f -sS -X POST "${REPO_URL}/statements" \
     -H "Content-Type: text/turtle" \
     --data-binary @"${AREAS_FILE}"
   echo "  ✅ Areas loaded"
 
-  echo "3/3 Loading facilities data..."
+  echo "3/3 Loading facilities..."
   curl -f -sS -X POST "${REPO_URL}/statements" \
     -H "Content-Type: text/turtle" \
     --data-binary @"${FACILITIES_FILE}"
@@ -156,16 +140,6 @@ COUNT_AFTER=$(
 )
 
 echo "📈 Total triples in '${REPO_NAME}': ${COUNT_AFTER}"
-
-if [ "${COUNT_AFTER:-0}" -gt 0 ]; then
-  echo "✅ GraphDB repository is ready and has data!"
-else
-  echo "⚠️  Warning: Repository exists but triple count is 0"
-fi
-
 echo "============================================"
-echo "🎉 GraphDB is ready for queries!"
-echo "🌐 Internal URL : ${GRAPHDB_URL}"
-echo "📦 Repository   : ${REPO_NAME}"
-echo "🔗 SPARQL URL   : ${REPO_URL}"
+echo "🎉 GraphDB ready!"
 echo "============================================"
